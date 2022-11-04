@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cors = require('cors')
+let _ = require('lodash');
 
 const app = express();
 const port = 9090;
@@ -9,7 +10,7 @@ const port = 9090;
 app.use(cors());
 app.use(bodyParser.json());
 
-const doctorsSchema = new mongoose.Schema({
+const DoctorsSchema = new mongoose.Schema({
     name: { type: String, required: true, },
     address: { type: String, required: true, },
     location: { type: String, required: true, },
@@ -17,7 +18,7 @@ const doctorsSchema = new mongoose.Schema({
     speciality: { type: Array, index: true },
 });
 
-const specialityLookupSchema = new mongoose.Schema({
+const SpecialityLookupSchema = new mongoose.Schema({
     specialityName: { type: String, required: true, },
     tags: {
         type: [{ type: String, lowercase: true }],
@@ -27,28 +28,8 @@ const specialityLookupSchema = new mongoose.Schema({
     },
 });
 
-const Spec = mongoose.model('Tank', specialityLookupSchema);
-
-specialityLookupSchema.pre('updateOne', function (next) {
-
-    console.log(
-        'sdasdssdsd'
-    )
-    var self = this;
-    console.log(self)
-    Spec.find({tags : self.name}, function (err, docs) {
-        console.log(docs)
-        if (!docs.length){
-            next();
-        }else{
-            console.log('user exists: ',self.name);
-            next(new Error("User exists!"));
-        }
-    });
-}) ;
-
-const Doctor = mongoose.model('doctors', doctorsSchema, "Doctors");
-const Speciality = mongoose.model('specialitylookup', specialityLookupSchema, "SpecialityLookup");
+const Doctor = mongoose.model('Doctors', DoctorsSchema, "Doctors");
+const Speciality = mongoose.model('SpecialityLookup', SpecialityLookupSchema, "SpecialityLookup");
 
 // Read ALL DOCTORS
 app.get('/doctors-all', (req, res) => {
@@ -102,31 +83,57 @@ app.get('/doctors', (req, res) => {
 });
 
 // Create Speciality
-app.post('/addtag', async (CHANGEEM, res) => {
+app.post('/addtag', async (req, res) => {
     /**
      * Sample JSON Request
      {
         "_id" : "635b922de28bf22f389ad664",
-        "tag" : "mickey"
+        "tag" : "mickey, "minnie"
     }
      *
      **/
 
-    let req = { body :{
-        "_id" : "63634e0e0eb1716e0ed557b9",
-        "tag" : ["mickey", "minnie"]
-    }}
+    // let req = { body :{
+    //     "_id" : "63634e0e0eb1716e0ed557b9",
+    //     "tag" :
+    // }}
 
-
-
-    // console.log(req.body)
-    Speciality.updateOne({ _id: req.body._id }, { $addToSet: { tags : { $each: req.body.tag }}})
-        .then(resp => {
-            console.log(resp);
-            res.send({success : true})
-
-    });
+    let newTags = req.body.tag = sanitizeInput(req.body.tags);
+    Speciality.find({ tags : {$in : newTags}}, (err, dbRes)=>{
+        switch (true) {
+            case dbRes.length > 0 && err == null:
+                let foundTags = [];
+                dbRes.forEach(item => foundTags = [...item.tags, ...foundTags])
+                console.log(foundTags)
+                // console.log(foundTags);
+                newTags = sanitizeRepeats(newTags, foundTags);
+                console.log(newTags)
+                if(newTags.length === 0){
+                    res.send({success: true, msg : "no update"})
+                    break;
+                }
+            case dbRes.length === 0 && err == null:
+                console.log(newTags)
+                Speciality.updateOne({ _id: req.body._id }, { $addToSet: { tags : { $each: newTags }}})
+                    .then(resp => {
+                        console.log(resp);
+                        res.send({success : true})
+                });
+                break;
+            default :
+                res.send({success : false});
+        }
+    }).select('tags');
 });
+
+function sanitizeInput(inputTextToArray){
+    const temp = _.compact((inputTextToArray.replace(/[0-9]/g, '')).split(","));
+    return temp.map(item => _.kebabCase(item));
+}
+
+function sanitizeRepeats(mainTags, repeatTags){
+    return mainTags.filter( ( el ) => !repeatTags.includes( el ) );
+}
 
 
 // Create Speciality
@@ -144,8 +151,9 @@ app.post('/specialitylookup', (req, res) => {
 
     Speciality.create({
         specialityName: jsonReq.specialityName,
-        tags: jsonReq.tags
+        tags: sanitizeInput(jsonReq.tags[0])
     }, (dberr, dbres) => {
+        console.log(dberr)
         if (dberr) res.send(dberr);
         res.send(dbres);
     });
