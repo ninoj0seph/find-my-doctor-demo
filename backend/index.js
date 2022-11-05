@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cors = require('cors')
 let _ = require('lodash');
+const path = require('path');
 
 const app = express();
 const port = 9090;
@@ -30,6 +31,12 @@ const SpecialityLookupSchema = new mongoose.Schema({
 
 const Doctor = mongoose.model('Doctors', DoctorsSchema, "Doctors");
 const Speciality = mongoose.model('SpecialityLookup', SpecialityLookupSchema, "SpecialityLookup");
+
+app.use(express.static('dist'))
+//
+// app.get('/', (req,res)=>{
+//     res.sendFile('/dist/index.html');
+// })
 
 // Read ALL DOCTORS
 app.get('/doctors-all', (req, res) => {
