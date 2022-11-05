@@ -48,6 +48,28 @@ app.get('/specialitylookup-all', (req, res) => {
     })
 });
 
+app.get('/tagslookup-all', (req, res) => {
+    Speciality.find({}, (dberr, dbres) => {
+        let retVal = [];
+        if (dberr) res.send(dberr);
+
+        dbres.forEach((spec)=>{
+            spec.tags.forEach((tag)=>{
+                retVal.push(_.startCase(tag))
+            })
+        });
+        res.send(retVal.sort());
+
+
+        // dbres.map((item) => {
+        //     // console.log(item.tags)
+        //     retVal.push(...item.tags)
+        // });
+        // console.log(_.sta);
+        // res.send(dbres);
+    }).select('tags');
+});
+
 // Find a speciality
 app.get('/specialitylookup', (req, res) => {
     let jsonReq = req.body;
@@ -66,7 +88,7 @@ app.get('/specialitylookup', (req, res) => {
 });
 
 // Find a doctor from a tag
-app.get('/doctors', (req, res) => {
+app.post('/doctors', (req, res) => {
     let jsonReq = req.body;
     /**
      * Sample JSON Request
@@ -75,11 +97,27 @@ app.get('/doctors', (req, res) => {
     }
      * 
     **/
+    let tag = _.kebabCase(req.body.tag);
+    if(tag.length > 0 ){
+        Speciality.findOne({ tags: _.kebabCase(req.body.tag) }, (specErr, specRes) => {
+            console.log(specRes)
+            if (specErr || specRes == null) {
+                res.send({success : false})
+            } else {
+                Doctor.find({speciality : specRes.specialityName}, (docErr, docRes)=>{
+                    if (docErr || docRes == null){
+                        res.send({success : false});
+                    } else {
+                        res.send(docRes);
+                    }
+                });
+            }
 
-    Doctor.find({ speciality: req.body.spec }, (dberr, dbres) => {
-        if (dberr) res.send(dberr);
-        res.send(dbres);
-    })
+        }).select('specialityName')
+    } else {
+        res.send({success : false});
+    }
+
 });
 
 // Create Speciality
